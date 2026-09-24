@@ -35,9 +35,21 @@ def test_ca02_get_existing_category():
     assert response.json()["id"] == 1
 
 
-# CA03: Consultar inexistente
-def test_ca03_get_non_existing_category():
-    response = client.get("/categories/999")
+# PRUEBA PARAMETRIZADA 1: Manejo de Recursos Inexistentes (404 Not Found)
+# Reemplaza y agrupa: CA03, CA09 y CA11
+@pytest.mark.parametrize("method, endpoint, payload", [
+    ("GET", "/categories/999", None),                      # CA03: Consultar inexistente
+    ("PATCH", "/categories/999", {"name": "Nuevo Nombre"}), # CA09: Actualizar inexistente
+    ("DELETE", "/categories/999", None),                   # CA11: Eliminar inexistente
+])
+def test_non_existing_category_operations(method, endpoint, payload):
+    if method == "GET":
+        response = client.get(endpoint)
+    elif method == "PATCH":
+        response = client.patch(endpoint, json=payload)
+    elif method == "DELETE":
+        response = client.delete(endpoint)
+    
     assert response.status_code == 404
 
 
@@ -57,17 +69,15 @@ def test_ca05_create_valid_category():
     assert "id" in data
 
 
-# CA06: Nombre demasiado corto
-def test_ca06_create_short_name():
-    payload = {"name": "TV"}
-    response = client.post("/categories", json=payload)
-    assert response.status_code == 422
-
-
-# CA07: Falta nombre
-def test_ca07_create_missing_name():
-    payload = {"description": "Sin nombre"}
-    response = client.post("/categories", json=payload)
+# PRUEBA PARAMETRIZADA 2: Validaciones de Payload Inválido en Creación (HTTP 422)
+# Reemplaza y agrupa: CA06 y CA07
+@pytest.mark.parametrize("invalid_payload, description", [
+    ({"name": "TV"}, "Nombre demasiado corto (< 3 caracteres)"), # CA06
+    ({"description": "Sin nombre"}, "Falta el campo 'name'"),   # CA07
+    ({"name": "   "}, "Nombre solo con espacios en blanco"),
+])
+def test_create_category_invalid_payload(invalid_payload, description):
+    response = client.post("/categories", json=invalid_payload)
     assert response.status_code == 422
 
 
@@ -79,24 +89,11 @@ def test_ca08_update_existing_category():
     assert response.json()["name"] == "Computadores Laptops"
 
 
-# CA09: Actualizar inexistente
-def test_ca09_update_non_existing_category():
-    payload = {"name": "Nuevo Nombre"}
-    response = client.patch("/categories/999", json=payload)
-    assert response.status_code == 404
-
-
 # CA10: Eliminar existente
 def test_ca10_delete_existing_category():
     response = client.delete("/categories/1")
     assert response.status_code == 204
     assert client.get("/categories/1").status_code == 404
-
-
-# CA11: Eliminar inexistente
-def test_ca11_delete_non_existing_category():
-    response = client.delete("/categories/999")
-    assert response.status_code == 404
 
 
 # CA12: Filtrar activas
@@ -108,18 +105,16 @@ def test_ca12_filter_active_categories():
     assert len(data) == 2
 
 
-# Reto Opcional: Búsqueda por nombre
-def test_reto_search_by_name():
-    response = client.get("/categories?search=comp")
+# PRUEBA PARAMETRIZADA 3: Búsquedas por nombre (QueryParams)
+# Reemplaza y agrupa: test_reto_search_by_name y test_reto_search_case_insensitive
+@pytest.mark.parametrize("search_term, expected_name", [
+    ("comp", "Computadores"),  # Búsqueda parcial en minúsculas
+    ("CELU", "Celulares"),     # Búsqueda Case-Insensitive en mayúsculas
+    ("Audio", "Audio"),        # Búsqueda exacta
+])
+def test_search_categories_by_name(search_term, expected_name):
+    response = client.get(f"/categories?search={search_term}")
     assert response.status_code == 200
     data = response.json()
     assert len(data) == 1
-    assert data[0]["name"] == "Computadores"
-
-
-def test_reto_search_case_insensitive():
-    response = client.get("/categories?search=CELU")
-    assert response.status_code == 200
-    data = response.json()
-    assert len(data) == 1
-    assert data[0]["name"] == "Celulares"
+    assert data[0]["name"] == expected_name
